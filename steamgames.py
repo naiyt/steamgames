@@ -22,6 +22,7 @@ from time import sleep
 
 
 class Base:
+	"""Base class mainly for opening urls and chunking data"""
 	def retry(self, url, time, retries):
 		"""If a url is unavaible, retries it "retries" number of times, with "time" space between tries"""
 		print "{} was unreachable, retrying {} number of times".format(url, retries)
@@ -50,6 +51,18 @@ class Base:
 
 
 class Games(Base):
+	"""
+	Class used to retrieve either all Game objects, or specific ones given a list of appids.
+
+	Example:
+	games = Games()
+	all_games = games.get_all('US') # Get a generator with all game info
+
+	# Get a generator for just the appids you specify
+	some_games = games.get_appids_info([123,1245])
+
+	"""
+
 	def __init__(self,num=None):
 		"""
 		Num is how many we can check against the Steam API per iteration. Defaults to 200,
@@ -61,7 +74,7 @@ class Games(Base):
 			self.num = 200
 		else:
 			self.num = num
-		self.appids_names = self.get_ids_names()
+		self.appids_to_names, self.names_to_appids = self.get_ids_and_names()
 
 	def _create_url(self, appids, cc):
 		"""Given a list of appids, creates an API url to retrieve them"""
@@ -80,7 +93,15 @@ class Games(Base):
 		return all_urls
 
 	def get_all(self, cc):
-		urls = self._get_urls(self.appids_names.keys(), cc)
+		"""
+		A generator that returns all games currently in the Steam Store as Game objects.
+		This wraps around _get_games_from, so that the even though we have seperate urls for
+		the games, when you call this method you just get one generator, that will give you
+		one game object at a time.
+
+		"""
+
+		urls = self._get_urls(self.appids_to_names.keys(), cc)
 		for url in urls:
 			print "Opening a new page of games..."
 			curr_games = self._get_games_from(url)
@@ -88,41 +109,99 @@ class Games(Base):
 				yield game
 
 	def _get_games_from(self, url):
+		"""
+		This generator actually creates the Game objects, and can be called from 
+		any method if you pass a list of url's to create the game appids from.
+
+		"""
+
 		page = json.loads(self.open_url(url).read())
 		for appid in page:
-			yield Game(page[appid], appid)
+			game = Game(page[appid], appid)
+			if game.success:
+				yield game
 
 
-	def get_appids_info(self, cc, appids):
+	def get_appids_info(self, appids, cc):
 		"""Given a list of appids, returns their Game objects"""
-		pass
+		urls = self._get_urls(appids, cc)
+		for url in urls:
+			print "Opening a new page of games..."
+			curr_games = self._get_games_from(url)
+			for game in curr_games:
+				yield game
 
-	def get_ids_names(self):
+	def get_ids_and_names(self):
 		"""Returns all appids in the store as a dictionary mapping appid to game_name"""
 		url = self.open_url("http://api.steampowered.com/ISteamApps/GetAppList/v2")
 		url_info = json.loads(url.read())
 		all_ids = {}
+		all_names = {}
 		for app in url_info['applist']['apps']:
 			all_ids[app['appid']] = app['name']
-		return all_ids
+			all_names[app['name']] = app['appid']
+
+		return all_ids, all_names
 		
 
 	def get_id(self, game_name):
-		"""Given a game name, returns it's appid"""
-		pass
+		if game_name in self.names_to_appids:
+			return self.names_to_appids[game_name]
 
 	def get_name(self, appid):
-		"""Given an appid, returns just it's game name"""
-		pass
+		if game_name in self.appids_to_names:
+			return self.appids_to_names[appid]
 
 
 class Game(Base):
+	"""
+	The actual Game() object -- really this is just a wrapper around the base
+	json response from Steam, that makes it a bit easier to go through the data.
+
+	"""
+
 	def __init__(self, game_json, appid):
+		"""This is kind of nasty. Probably want to do this in a nicer way."""
+		self.appid = appid
 		if 'success' in game_json:
-			try:
-				print "{}: {}".format(appid, str(game_json['data']['price_overview']['initial']/100))
-			except:
-				print "Fail"
+			self.success = game_json['success']
+			if self.success:
+				data = game_json['data']
+				self.type = data['type']
+				self.description = data['detailed_description']
+				try:
+					self.name = data['name']
+				except KeyError:
+					self.name = "No Name"
+				try:
+					self.supported_languages = data['supported_languages']
+				except KeyError:
+					self.supported_languages = None
+				self.header_image = data['header_image']
+				self.website = data['website']
+				try:
+					self.currency = data['price_overview']['currency']
+					self.price = self._calc_price(data['price_overview']['initial'])
+					self.discounted_price = self._calc_price(data['price_overview']['final'])
+					self.discount_percent = data['price_overview']['discount_percent']
+				except KeyError:
+					self.currency = None
+					self.price = 0
+					self.discounted_price = 0
+					self.discount_percent = 0
+				try:
+					self.packages = data['packages']
+				except KeyError:
+					self.packages = None
+				self.platforms = data['platforms']
+				try:
+					self.categories = data['categories']
+				except KeyError:
+					self.categories = None
+
 		else:
-			print "Error! Can't read a game."
-		
+			print "Error! Can't read the game for {}".format(appid)
+
+	def _calc_price(self, amount):
+		"""Prices from the API are represented by cents -- convert to dollars"""
+		return float(amount) / 100.0
