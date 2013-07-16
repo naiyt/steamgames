@@ -3,6 +3,8 @@ steamgames
 
 This is a script that will either provide a Games object for every appid currently in the Steam store, or will create a Games object for a specific list of appids that you pass in.
 
+To see a demonstration of this script retrieving all games currently on sale on Steam, [go here](http://74.63.212.37/sales.html). For an explanation, with source for the example, [go here](http://natecollings.com/?p=68 ).
+
 Pre-reqs
 ========
 
@@ -93,7 +95,7 @@ Retrieve info on a list of appids
 TODO:
 ====
 
-* Setup unit tests
 * Make sure everything we would want from the Games object is included. (The JSON returned has some more properties, that you may or may not want.)
 * Initial setup is kind of slow for some reason (I think the chunking is slow or something)
 * Document the different country codes
+* Add more tests

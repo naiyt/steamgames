@@ -38,11 +38,13 @@ class Base:
 			return urllib2.urlopen(url)
 		except urllib2.URLError as e:
 			print 'URLError = {}'.format(str(e.reason))
+			exit()
 		except urllib2.HTTPError as e:
 			print 'HTTPError = {}'.format(str(e.code))
 			return _retry(self, url, 5, 5)
 		except ValueError:
 			print 'Not a proper url: {}'.format(url)
+			exit()
 
 	def _chunks(self, params, number):
 		"""Breaks a list into a set of equally sized chunked lists, with remaining entries in last list"""
@@ -78,7 +80,7 @@ class Games(Base):
 		# names_to_appids is a dict mapping names -> appids
 		# Probably not necessary to have both
 		print "Setting things up..."
-		self.appids_to_names, self.names_to_appids = self.get_ids_and_names()
+		self.appids_to_names, self.names_to_appids = None, None
 
 	def _create_url(self, appids, cc):
 		"""Given a list of appids, creates an API url to retrieve them"""
@@ -104,7 +106,10 @@ class Games(Base):
 		one game object at a time.
 
 		"""
-		print "Chunking data to be received..."
+		if self.appids_to_names is None or self.names_to_appids is None:
+			print "Retrieving all current appids from Steam..."
+			self.appids_to_names, self.names_to_appids = self.get_ids_and_names()
+		print "Chunking data..."
 		urls = self._get_urls(self.appids_to_names.keys(), cc)
 		for url in urls:
 			print "Opening a new page of games..."
@@ -144,7 +149,6 @@ class Games(Base):
 		for app in url_info['applist']['apps']:
 			all_ids[app['appid']] = app['name']
 			all_names[app['name']] = app['appid']
-
 		return all_ids, all_names
 		
 
@@ -180,6 +184,7 @@ class Game(Base):
 		if 'success' in game_json:
 			self.success = game_json['success']
 			if self.success:
+				self.store_url = self._calc_store_url(self.appid)
 				data = game_json['data']
 				self.type = data['type']
 				self.description = data['detailed_description']
@@ -226,3 +231,6 @@ class Game(Base):
 	def _calc_price(self, amount):
 		"""Prices from the API are represented by cents -- convert to dollars"""
 		return float(amount) / 100.0
+
+	def _calc_store_url(self, appid):
+		return "http://store.steampowered.com/app/{}".format(appid)
