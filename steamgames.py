@@ -23,9 +23,9 @@ from time import sleep
 
 class Base:
 	"""Base class mainly for opening urls and chunking data"""
-	def retry(self, url, time, retries):
+	def _retry(self, url, time, retries):
 		"""If a url is unavaible, retries it "retries" number of times, with "time" space between tries"""
-		print "{} was unreachable, retrying {} number of times".format(url, retries)
+		print "{} was unreachable, _retrying {} number of times".format(url, retries)
 		for num in range(retries):
 			try:
 				return urllib2.urlopen(url)
@@ -33,18 +33,18 @@ class Base:
 				sleep(time)
 		print "Couldn't reach {} after {} retries. Moving to next.".format(url, retries)
 
-	def open_url(self, url):
+	def _open_url(self, url):
 		try:
 			return urllib2.urlopen(url)
 		except urllib2.URLError as e:
 			print 'URLError = {}'.format(str(e.reason))
 		except urllib2.HTTPError as e:
 			print 'HTTPError = {}'.format(str(e.code))
-			return retry(self, url, 5, 5)
+			return _retry(self, url, 5, 5)
 		except ValueError:
 			print 'Not a proper url: {}'.format(url)
 
-	def chunks(self, params, number):
+	def _chunks(self, params, number):
 		"""Breaks a list into a set of equally sized chunked lists, with remaining entries in last list"""
 		for i in xrange(0, len(params), number):
 			yield params[i:i+number]
@@ -74,6 +74,10 @@ class Games(Base):
 			self.num = 200
 		else:
 			self.num = num
+		# appids_to_names is a dict mapping appid -> game names
+		# names_to_appids is a dict mapping names -> appids
+		# Probably not necessary to have both
+		print "Setting things up..."
 		self.appids_to_names, self.names_to_appids = self.get_ids_and_names()
 
 	def _create_url(self, appids, cc):
@@ -86,7 +90,7 @@ class Games(Base):
 
 	def _get_urls(self, appids, cc):
 		"""Returns urls for all of appids"""
-		list_of_ids = list(self.chunks(appids,self.num))
+		list_of_ids = list(self._chunks(appids,self.num))
 		all_urls = []
 		for x in list_of_ids:
 			all_urls.append(self._create_url(x, cc))
@@ -100,7 +104,7 @@ class Games(Base):
 		one game object at a time.
 
 		"""
-
+		print "Chunking data to be received..."
 		urls = self._get_urls(self.appids_to_names.keys(), cc)
 		for url in urls:
 			print "Opening a new page of games..."
@@ -115,14 +119,14 @@ class Games(Base):
 
 		"""
 
-		page = json.loads(self.open_url(url).read())
+		page = json.loads(self._open_url(url).read())
 		for appid in page:
 			game = Game(page[appid], appid)
 			if game.success:
 				yield game
 
 
-	def get_appids_info(self, appids, cc):
+	def get_info_for(self, appids, cc):
 		"""Given a list of appids, returns their Game objects"""
 		urls = self._get_urls(appids, cc)
 		for url in urls:
@@ -133,7 +137,7 @@ class Games(Base):
 
 	def get_ids_and_names(self):
 		"""Returns all appids in the store as a dictionary mapping appid to game_name"""
-		url = self.open_url("http://api.steampowered.com/ISteamApps/GetAppList/v2")
+		url = self._open_url("http://api.steampowered.com/ISteamApps/GetAppList/v2")
 		url_info = json.loads(url.read())
 		all_ids = {}
 		all_names = {}
@@ -145,10 +149,12 @@ class Games(Base):
 		
 
 	def get_id(self, game_name):
+		"""Given an appid, returns the game name"""
 		if game_name in self.names_to_appids:
 			return self.names_to_appids[game_name]
 
 	def get_name(self, appid):
+		"""Given a game name returns its appid"""
 		if game_name in self.appids_to_names:
 			return self.appids_to_names[appid]
 
@@ -161,7 +167,15 @@ class Game(Base):
 	"""
 
 	def __init__(self, game_json, appid):
-		"""This is kind of nasty. Probably want to do this in a nicer way."""
+		"""
+		Curently, this just sets member variables for the various values
+		that the game object should have. Not all of these exist on all
+		appids, so there's some defaults whenever there is a key error.
+		I'll admit this looks kind of nasty, but it works. Perhaps someone
+		would be willing to make this look a bit better/more Pythonic?
+
+		"""
+
 		self.appid = appid
 		if 'success' in game_json:
 			self.success = game_json['success']
@@ -169,16 +183,20 @@ class Game(Base):
 				data = game_json['data']
 				self.type = data['type']
 				self.description = data['detailed_description']
+
 				try:
 					self.name = data['name']
 				except KeyError:
 					self.name = "No Name"
+
 				try:
 					self.supported_languages = data['supported_languages']
 				except KeyError:
 					self.supported_languages = None
+
 				self.header_image = data['header_image']
 				self.website = data['website']
+
 				try:
 					self.currency = data['price_overview']['currency']
 					self.price = self._calc_price(data['price_overview']['initial'])
@@ -189,11 +207,14 @@ class Game(Base):
 					self.price = 0
 					self.discounted_price = 0
 					self.discount_percent = 0
+
 				try:
 					self.packages = data['packages']
 				except KeyError:
 					self.packages = None
+
 				self.platforms = data['platforms']
+
 				try:
 					self.categories = data['categories']
 				except KeyError:
