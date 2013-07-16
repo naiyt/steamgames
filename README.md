@@ -13,7 +13,7 @@ Pre-reqs
 Usage
 =====
 
-Usage is simple. You create a Games object, which in turn can return you either all of the appids in the form of Game objects, a list of appids as Game objects. These are returned as generators that you can iterate through as needed. appid's are fetched from the API in chunks of 200 at a time. Since they are retrieved through a generator, this means that every 200 appids you'll have to wait a few seconds while the next chunk is retrieved from Steam.
+Usage is simple. You create a Games object, which in turn can return you either all of the appids in the form of Game objects, or a list of appids as Game objects. These are returned as generators that you can iterate through as needed. appid's are fetched from the API in chunks of 200 at a time. Since they are retrieved through a generator, this means that every 200 appids you'll have to wait a few seconds while the next chunk is retrieved from Steam.
 
 Basics:
 ------
@@ -46,12 +46,12 @@ Available data members of the Game object:
 Examples:
 ========
 
-* First, setup your Games object:
+First, setup your Games object:
     
     from steamgames import Games
     games = Games()
 
-* Find all games with a price less than $5.00:
+Find all games with a price less than $5.00:
 
     all_games = games.get_all('us')
     less_than_5 = []
@@ -60,7 +60,7 @@ Examples:
             if game.price < 5.00:
                 less_than_5.append(game)
 
-* Find the price of all games on Steam:
+Find the price of all games on Steam:
 
     all_games = games.get_all('us')
     total = 0.0
@@ -68,7 +68,7 @@ Examples:
         if game.price:
             total += game.price
 
-* Find ONLY games (no demos, trailers, etc):
+Find ONLY games (no demos, trailers, etc):
 
     all_games = games.get_all('us')
     for game in all_games:
@@ -76,14 +76,14 @@ Examples:
             do_things_with_game(game)
 
 
-* Find games in packages:
+Find games in packages:
     
     all_games = games.get_all('us')
     for game in all_games:
         if game.packages:
             print game.packages
 
-* Retrieve info on a list of appids
+Retrieve info on a list of appids
 
      appids = [1,2,3,4]
      some_games = games.get_info_for(appids, 'us')
